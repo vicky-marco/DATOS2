@@ -1,1 +1,33 @@
+{r}
+library(tidyverse)
+library(sf)
+options (scipen = 100)
 
+
+{r}
+Barrios <- st_read("https://raw.githubusercontent.com/flokihara/DATOS2/main/data/Analysis%20Neighborhoods.geojson")
+
+
+{r}
+summary(Barrios)
+
+{r}
+st_crs(Barrios)
+
+
+
+{r}
+ProyZonificacionInclu <- read.csv("https://raw.githubusercontent.com/flokihara/DATOS2/main/data/Residential_Projects_With_Inclusionary_Requirements.csv")
+
+
+{r}
+summary(ProyZonificacionInclu)
+
+
+
+{r fig.height=10, fig.width=10}
+ggplot() +
+    geom_sf(data = Barrios, fill=NA,color="gray60") +
+    geom_point(data = ProyZonificacionInclu, aes (x=Longitude, y=Latitude), alpha = .5, 
+               color = "hotpink4", size=2, show.legend = "point")+
+    scale_colour_manual(values= c("Proyectos de Zonificacion Inclusiva"="hotpink4"), name=…
