@@ -1,1 +1,106 @@
+---
+title: "TP 1"
+author: "Florencia Kihara y Victoria Marco"
+date: "11/6/2021"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(sf)
+options (scipen = 100)
+```
+
+```{r}
+Barrios <- st_read("https://raw.githubusercontent.com/flokihara/DATOS2/main/data/Analysis%20Neighborhoods.geojson")
+```
+
+```{r}
+summary(Barrios)
+```
+```{r}
+st_crs(Barrios)
+```
+
+
+```{r}
+ProyZonificacionInclu <- read.csv("https://raw.githubusercontent.com/flokihara/DATOS2/main/data/Residential_Projects_With_Inclusionary_Requirements.csv")
+```
+
+```{r}
+summary(ProyZonificacionInclu)
+```
+
+
+```{r fig.height=10, fig.width=10}
+ggplot() +
+    geom_sf(data = Barrios, fill=NA,color="gray60") +
+    geom_point(data = ProyZonificacionInclu, aes (x=Longitude, y=Latitude), alpha = .5, 
+               color = "hotpink4", size=2, show.legend = "point")+
+    scale_colour_manual(values= c("Proyectos de Zonificacion Inclusiva"="hotpink4"), name="Referencias")+
+  labs(title = "Ubicación geográfica de los proyectos de zonificacion inclusiva en San Francisco",
+       caption = "Fuente: DATA SF",
+       colour="Proyectos de zonificación inclusiva")+
+  theme_void()+
+  theme(plot.title = element_text(size = 16),
+        plot.caption = element_text(size = 10))
+```
+
+```{r}
+ProyZonificacionInclu <- ProyZonificacionInclu %>% 
+    filter(!is.na(Latitude), !is.na(Longitude)) %>% 
+    st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326)
+```
+
+```{r}
+PZI_barrios <-st_join (ProyZonificacionInclu, Barrios)
+```
+
+```{r}
+head(PZI_barrios)
+```
+
+```{r}
+PZI_barrios %>% 
+    group_by(nhood) %>% 
+    summarise(cantidad = n())
+```
+
+```{r fig.height=10, fig.width=10}
+ggplot() +
+    geom_sf(data = Barrios, fill=NA,color="gray60") +
+    geom_sf(data = PZI_barrios, aes(color = nhood), size=2, alpha=0.60)+
+  labs(title = "Ubicación de los proyectos de zonificacion inclusiva por barrio en San Francisco",
+       caption = "Fuente: DATA SF",
+       colour="Barrios")+
+  theme_void()+
+  theme(plot.title = element_text(size = 16),
+        plot.caption = element_text(size = 10))
+```
+
+
+```{r}
+PZI_barrios_no_espacial <- PZI_barrios %>%
+  st_set_geometry(NULL)
+```
+
+```{r}
+PZI_cantidad_barrios <- PZI_barrios_no_espacial %>% 
+  group_by(nhood) %>% 
+  summarise(cantidad=n())
+```
+
+
+```{r fig.height=10, fig.width=20}
+ggplot() +
+  geom_col(data= PZI_cantidad_barrios, aes(x=nhood, y=cantidad))+
+  labs(title="Cantidad de proyectos de zonificación inclusiva por barrio", caption=" Fuente: DATA SF", x="Barrios de San Francisco", y="Cantidad de proyectos de zonificación inclusiva")+
+  theme(axis.text=element_text(size=15), axis.title=element_text(size=20))+
+  theme(plot.title = element_text(size = 16),
+        plot.caption = element_text(size = 10))+
+  scale_fill_viridis_d()
+```
+ 
+    
+
+
 
