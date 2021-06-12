@@ -1,1 +1,9 @@
-
+nos faltaría poner cuánto hay de cada caso! 
+```{r fig.height=10, fig.width=25}
+ggplot() +
+  geom_col(data= PZI_cantidad_barrios, aes(x=reorder(nhood, -cantidad), y=cantidad, fill=nhood))+
+  labs(title="Cantidad de proyectos de zonificación inclusiva por barrio", caption=" Fuente: DATA SF", x="Barrios de San Francisco", y="Cantidad de proyectos de zonificación inclusiva")+
+  theme(axis.text=element_text(size=15), axis.title=element_text(size=20),
+        axis.text.x = element_text(colour = "gray25",size = 8), 
+        axis.text.y = element_text(colour = "gray25",size = 10))
+```
