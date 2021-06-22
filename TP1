@@ -1,1 +1,410 @@
+---
+title: "TP 1"
+author: "Florencia Kihara y Victoria Marco"
+date: "12/6/2021"
+output: html_document
+---
 
+# **Ciencia de Datos II**
+
+## **Trabajo Práctico N°1**
+
+Alumnas: Florencia Kihara y Victoria Marco
+
+1.  Elegimos la ciudad de San Francisco, EEUU.
+2.  Elegimos el dataset de los proyectos residenciales con zonificación inclusiva (desde ahora, PRZI) en la ciudad.
+
+```{r}
+library(tidyverse)
+library(sf)
+options (scipen = 100)
+```
+
+Cargamos el dataset de los barrios de San Francisco.
+
+```{r}
+Barrios <- st_read("https://raw.githubusercontent.com/flokihara/DATOS2/main/data/Analysis%20Neighborhoods.geojson")
+```
+
+```{r}
+summary(Barrios)
+head(Barrios)
+```
+
+```{r}
+st_crs(Barrios)
+```
+
+Ahora, cargaremos el dataset sobre los PRZI.
+
+```{r}
+ProyZonificacionInclu <- read.csv("https://raw.githubusercontent.com/flokihara/DATOS2/main/data/Residential_Projects_With_Inclusionary_Requirements.csv")
+```
+
+```{r}
+summary(ProyZonificacionInclu)
+```
+
+Ahora, haremos un mapa para conocer la ubicación de los PRZI. Para ello, tomaremos como primera capa el dataset georreferenciado de los barrios y le agregaremos, a través de las variables "latitud" y "longitud" la data que refiere a la ubicación de los PRZI (los colocamos con la función "geom_point" ya que no es un dataset espacial aún)
+
+```{r fig.height=10, fig.width=10}
+ggplot() +
+    geom_sf(data = Barrios, fill=NA,color="gray60") +
+    geom_point(data = ProyZonificacionInclu, aes (x=Longitude, y=Latitude, colour = "PRZI", show.legend = "point"), alpha = .5, size=2)+
+  labs(title = "Ubicación geográfica de los proyectos residenciales de zonificacion inclusiva en San Francisco",
+       caption = "Fuente: DATA SF", colour="Referencias")+
+  scale_colour_manual(values= c("PRZI"="hotpink4"))+
+  theme_void()+
+  theme(plot.title = element_text(size = 16),
+        plot.caption = element_text(size = 10))
+```
+
+3.  Ahora, con el fin de poder transformar el dataset de PRZI a uno espacial, haremos el siguiente procedimiento:
+
+```{r}
+ProyZonificacionInclu <- ProyZonificacionInclu %>% 
+    filter(!is.na(Latitude), !is.na(Longitude)) %>% 
+    st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326)
+```
+
+```{r}
+PZI_barrios <-st_join (ProyZonificacionInclu, Barrios)
+```
+
+Para verificar que se haya incorporado la geometría al dataset, aplicamos "head".
+
+```{r}
+head(PZI_barrios)
+```
+
+A partir del agregado de la geometría, podemos realizar el siguiente gráfico en el que se observa la ubicación de los PRZI en diferentes colores según el barrio en el que se encuentren.
+
+```{r fig.height=8, fig.width=10}
+ggplot() +
+    geom_sf(data = Barrios, fill=NA,color="gray60") +
+    geom_sf(data = PZI_barrios, aes(color = nhood), size=2, alpha=0.60)+
+  labs(title = "Ubicación de los proyectos residenciales de zonificacion inclusiva por barrio en San Francisco",
+       caption = "Fuente: DATA SF",
+       colour="Barrios")+
+  theme_void()+
+  theme(plot.title = element_text(size = 16),
+        plot.caption = element_text(size = 10))
+```
+
+3.1 Para poder realizar el gráfico de columnas solicitado en este punto, realizamos el siguiente procedimiento:
+
+```{r}
+PZI_barrios_no_espacial <- PZI_barrios %>%
+  st_set_geometry(NULL)
+```
+
+```{r}
+PZI_cantidad_barrios <- PZI_barrios_no_espacial %>% 
+  group_by(nhood) %>% 
+  summarise(cantidad=n())
+```
+
+```{r fig.height=15, fig.width=25}
+ggplot() +
+  geom_col(data= PZI_cantidad_barrios, aes(x=reorder(nhood, -cantidad), y=cantidad, fill=nhood))+
+  geom_text(data= PZI_cantidad_barrios, aes(x=reorder(nhood, -cantidad), y=cantidad, label=as.integer(cantidad)), size=6)+
+  labs(title="Cantidad de proyectos residenciales de zonificación inclusiva por barrio", caption=" Fuente: DATA SF", x="Barrios de San Francisco", y="Cantidad de proyectos de zonificación inclusiva", fill= "Barrios")+
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),
+        axis.text.x = element_text(colour = "gray25",size = 15, angle = 90), 
+        axis.text.y = element_text(colour = "gray25",size = 15))
+```
+
+A partir de este gráfico, podemos observar que existe una gran dispersión respecto a la cantidad de PRZI realizados en cada barrio. Por ejemplo, mientras que South of Market posee 69 PRZI, el siguiente barrio considerando la cantidad de forma descendente posee 53 (barrio: Mission), es decir, una diferencia de 16 PRZI. Por otro lado, también se puede apreciar que la mayoría de los barrios poseen menos de 10 PRZI (3 barrios poseen 7 PRZI; 2 poseen 5 PRZI; 5 poseen 4 PRZI; 4 poseen 3 PRZI, 4 poseen 2 PRZI y 4 poseen 1 PRZI).
+
+3.2 Ahora realizaremos un mapa coroplético mediante el siguiente procedimiento.
+
+```{r}
+cantidadPZI_barrios <- Barrios %>% 
+  left_join(PZI_cantidad_barrios, by="nhood")
+```
+
+```{r fig.height=15, fig.width=25}
+ggplot()+
+  geom_sf(data=Barrios, fill="gray60")+
+  geom_sf(data= cantidadPZI_barrios, aes(fill=cantidad))+
+  geom_sf_label(data= cantidadPZI_barrios, aes(label=nhood), size=5.5)+
+labs(title = "Cantidad de proyectos residenciales de zonificación inclusiva por barrio", 
+       fill = "Cantidad de PRZI", 
+       caption = "Fuente: DATA SF",
+     x="Longitud", y="Latitud")+
+   theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))+
+  scale_fill_viridis_c()
+```
+
+A través de este mapa, es posible reconfirmar la dispersión de cantidad de PRZI nombrada en el análisis del gráfico anterior, ya que se observa una gran diferencia entre los barrios del noroeste de la Ciudad (que poseen gran número de PRZI) y el resto, que se encuentran coloreados de manera oscura, demostrando los pocos PRZI.
+
+Además, el valor agregado de este mapa es que nos permite observar que 7 barrios (los coloreados en gris) no poseen ningún PRZI.
+
+Ahora bien, nos gustaría poder observar este mismo mapa pero contextualizado en su entorno. Para ello, utilizaremos la función "ggmap" obteniendo la información de <http://maps.stamen.com/>.
+
+```{r}
+library(ggmap)
+```
+
+```{r}
+bbox_Barrios <- as.numeric(st_bbox(Barrios))
+```
+
+```{r}
+Mapa_SF <- get_stamenmap(bbox = bbox_Barrios,
+                      maptype = "toner-lite",
+                      zoom=12)
+```
+
+Visualizaremos el mapa obtenido para verificar que el procedimiento haya sido correcto.
+
+```{r}
+ggmap(Mapa_SF)
+```
+
+A continuación, realizaremos el mapa coroplético contextualizado.
+
+```{r fig.height=15, fig.width=25}
+ggmap(Mapa_SF)+
+  geom_sf(data= cantidadPZI_barrios, aes(fill=cantidad),inherit.aes = FALSE, alpha=0.90, color="gray20")+
+   labs(title = "Cantidad de proyectos residenciales de zonificación inclusiva por barrio", 
+       fill = "Cantidad de PRZI", 
+       caption = "Fuente: DATA SF",
+     x="Longitud", y="Latitud") +
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))+
+  scale_fill_viridis_c()
+```
+
+El valor agregado de este mapa es que nos permite ver que el barrio Treasure Island está conectado a la ciudad continental mediante lo que presumimos es una vía.
+
+-   Nota: Este mapa contextualizado no posee las etiquetas de cada barrio para no obstaculizar la visión del entorno.
+
+## **Trabajo Práctico N°1 (según devolución)**
+
+Realizamos nuevamente el gráfico del punto 3.1 pero eliminando la leyenda, ya que no aporta valor al estar todos los barrios escritos en el eje X.
+
+```{r fig.height=15, fig.width=25}
+ggplot() +
+  geom_col(data= PZI_cantidad_barrios, aes(x=reorder(nhood, -cantidad), y=cantidad, fill=nhood))+
+  geom_text(data= PZI_cantidad_barrios, aes(x=reorder(nhood, -cantidad), y=cantidad, label=as.integer(cantidad)), size=6)+
+  labs(title="Cantidad de proyectos residenciales de zonificación inclusiva por barrio", caption=" Fuente: DATA SF", x="Barrios de San Francisco", y="Cantidad de proyectos de zonificación inclusiva", fill= "Barrios")+
+  theme(legend.position = "none")+
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),
+        axis.text.x = element_text(colour = "gray25",size = 15, angle = 90), 
+        axis.text.y = element_text(colour = "gray25",size = 15))
+```
+
+Ahora analizaremos la densidad de los PRZI de cada barrio, con el fin de conocer si existe una posible relación entre la cantidad de proyectos y la superficie de los barrios.
+
+Como no poseemos la superficie en el dataset Barrios, la calculamos con el siguiente procedimiento. 
+
+```{r}
+library(lwgeom)
+```
+
+```{r}
+Barrios <- Barrios %>%  
+  mutate(superficie=st_area(Barrios))
+```
+
+
+```{r}
+head(Barrios)
+```
+
+```{r}
+Barrios <- Barrios %>%
+  mutate(superficie_km=round(as.numeric(superficie)/1000000, 2))
+```
+
+```{r}
+Barrios_noespacial <- Barrios %>%
+  st_set_geometry(NULL)
+```
+
+
+```{r}
+cantidadPZI_barrios <- cantidadPZI_barrios %>% 
+  left_join(Barrios_noespacial, by="nhood")
+```
+
+```{r}
+cantidadPZI_barrios <- mutate(cantidadPZI_barrios, densidad=round(cantidad/superficie_km, 2))
+```
+
+```{r fig.height=15, fig.width=25}
+ggmap(Mapa_SF)+
+  geom_sf(data= cantidadPZI_barrios, aes(fill=densidad),inherit.aes = FALSE, alpha=0.95, color="black")+
+   labs(title = "Densidad de proyectos residenciales de zonificación inclusiva por barrio", 
+       fill = "Densidad de PRZI", 
+       caption = "Fuente: DATA SF",
+     x="Longitud", y="Latitud") +
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))+
+  scale_fill_viridis_c()
+```
+
+Analizando el mapa coroplético anterior, se observa que: 
+
+- La mayor densidad de PRZI se encuentra en los barrios del noroeste de San Francisco. Probablemente, esto se deba a que dichos barrios presentan gran cantidad de PRZI y superficies relativamente pequeñas en comparación a otros barrios. 
+
+- En el caso de los barrios del sur, que tienen mayor superficie, presentan menor densidad de PRZI. 
+
+- El barrio South of Market es el que presenta mayor densidad de PRZI (coloreado en amarillo), como así también mayor cantidad (tal como se observó en el mapa del punto 3.2)
+
+
+## **Trabajo Práctico N°2**
+
+```{r}
+library(osmdata)
+library(leaflet)
+```
+
+
+```{r}
+bbox_sf <- getbb("San Francisco City and County, California", limit = 10)
+```
+
+```{r}
+bbox_sf
+```
+
+
+```{r}
+mapa_sf2 <- get_stamenmap(bbox=bbox_sf,
+                          zoom=12)
+```
+
+```{r}
+ggmap(mapa_sf2)
+```
+
+
+```{r}
+bbox_sf_poligono <- getbb("San Francisco City and County, California", format_out = "sf_polygon")
+geometria <-  bbox_sf_poligono[["multipolygon"]]
+```
+
+```{r}
+geometria
+```
+
+```{r fig.height=5, fig.width=15}
+ggmap(mapa_sf2)+
+  geom_sf(data=geometria, fill=NA, size=1, color="firebrick3", inherit.aes = FALSE)+
+  labs(title="Polígono de San Francisco",
+       subtitle= "Continental e insular",
+       caption="Fuente: Open Street Map")+
+  theme(title=element_text(size=100),
+    axis.text=element_text(size=50), axis.title=element_text(size=100))+
+  theme_void()
+```
+
+```{r}
+sf_calles <- opq(bbox_sf) %>% 
+  add_osm_feature (key="highway")
+```
+
+```{r}
+sf_calles <- osmdata_sf(sf_calles)
+```
+
+```{r}
+sf_calles
+```
+
+```{r}
+sf_calles <- sf_calles$osm_lines
+```
+
+```{r}
+dim(sf_calles)
+```
+
+
+
+```{r fig.height=5, fig.width=15}
+ggmap(mapa_sf2)+
+    geom_sf(data = sf_calles , aes (color="Calles"), alpha=0.5, inherit.aes = FALSE)+
+  geom_sf(data=geometria, fill= NA, color= "red", inherit.aes = FALSE)+
+  labs(title="Calles dentro del polígono seleccionado de San Francisco",
+       caption="Fuente: Open Street Map")+
+   scale_colour_manual(values=c("Calles"="deepskyblue4"),name="Referencia", guide = guide_legend(override.aes = list(linetype = "blank"))) +
+  theme_void()+
+  theme(plot.title = element_text(hjust=0.07, face = "bold"),
+      plot.caption = element_text(size=10))
+```
+
+
+
+Visto y considerando que el polígono obtenido mediante el procedimiento anterior aplica tanto para el área continental como insular de San Francisco y alrededores, al obtener el dato de las calles se evidencian 67.825 observaciones. Por lo tanto, con el fin de poder delimitar las calles solamente para el área continental de San Francisco (área que ha sido objeto de estudio en el TP1), realizaremos el siguiente procedimiento para limitar el polígono solo al área deseada. 
+
+
+```{r}
+st_crs (Barrios)
+```
+
+```{r}
+geometria2 <- st_join(Barrios, geometria)
+```
+
+```{r}
+sf_calles2 <- st_intersection(sf_calles, geometria2)
+```
+
+
+
+```{r fig.height=15, fig.width=25}
+ggmap(mapa_sf2)+
+    geom_sf(data = sf_calles2, color="deepskyblue4", alpha=0.5, inherit.aes = FALSE)+
+  labs(title="Calles en área seleccionada en San Francisco",
+       caption="Fuente: Open Street Map")+
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))+
+  theme_void()
+```
+
+
+```{r fig.height=15, fig.width=25}
+ggmap(Mapa_SF)+
+    geom_sf(data = sf_calles2, color="deepskyblue4", alpha=0.5, inherit.aes = FALSE)+
+  labs(title="Calles en área seleccionada en San Francisco",
+       subtitle= "Sobre la base del mapa barrial",
+       caption="Fuente: Open Street Map")+
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))+
+  theme_void()
+```
+
+Ahora, filtraremos el dataset de las calles para obtener el dato de máxima velocidad permitida y poder crear un mapa a partir de ello.
+
+```{r}
+sf_calles_filtrado <- select (sf_calles2 ,highway, lanes, maxspeed,oneway,surface,geometry)
+```
+
+```{r}
+sf_calles_filtrado2 <- filter(sf_calles_filtrado, !is.na (maxspeed))
+```
+
+
+```{r}
+sf_calles_filtrado2 <- separate(sf_calles_filtrado2, maxspeed, c("velmax", "mph"), sep = " ")
+```
+
+EN EL SIGUIENTE MAPA HAY QUE CHEQUEAR QUE SALGA BIEN. AYER ME SALIÓ PERO HOY NO, VUELVO A PROBAR MÁS TARDE. 
+
+```{r fig.height=15, fig.width=25}
+ggmap(Mapa_SF)+
+  geom_sf(data=geometria2, fill= NA, color= "hotpink4", inherit.aes = FALSE)+
+  geom_sf(data=sf_calles_filtrado2, color= as.numeric (velmax), inherit.aes = FALSE)+
+  scale_color_viridis_c("Velocidad máxima permitida")+
+  labs(title = "Calles según velocidad máxima permitida en San Francisco", 
+       legend = "Velocidad máxima permitida", 
+       caption = "Fuente: DATA SF",
+     x="Longitud", y="Latitud") +
+  labs ()
+```
