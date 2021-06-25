@@ -408,3 +408,180 @@ ggmap(Mapa_SF)+
      x="Longitud", y="Latitud") +
   labs ()
 ```
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Ahora, filtraremos el dataset de las calles para obtener el dato de máxima velocidad permitida y poder crear un mapa a partir de ello.
+
+```{r}
+sf_calles_filtrado <- select (sf_calles2 ,highway, lanes, maxspeed,oneway,surface,geometry)
+```
+
+```{r}
+sf_calles_filtrado2 <- filter(sf_calles_filtrado, !is.na (maxspeed))
+```
+
+
+```{r}
+sf_calles_filtrado2 <- separate(sf_calles_filtrado2, maxspeed, c("velmax", "mph"), sep = " ")
+```
+
+```{r}
+sf_calles_filtrado2 <- sf_calles_filtrado2 %>% 
+  mutate(velmax=as.numeric(velmax)) %>% 
+  mutate(velmaxkm=velmax*1.6)
+```
+
+
+
+```{r fig.height=15, fig.width=25}
+ggmap(Mapa_SF)+
+  geom_sf(data=geometria2, fill= NA, color= "hotpink4", inherit.aes = FALSE)+
+  geom_sf(data=sf_calles_filtrado2, aes(color=velmaxkm), inherit.aes = FALSE)+
+  scale_color_viridis_c("Velocidad máxima permitida km/h")+
+  labs(title = "Calles según velocidad máxima permitida en San Francisco", 
+       caption = "Fuente: DATA SF",
+     x="Longitud", y="Latitud") +
+    theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))
+```
+
+En primer lugar, resulta importante mencionar que a partir de la manipulación de los datos (es decir, el filtrado para poder conservar las calles ubicadas en el polígono continental y posterior filtrado para obtener aquellas calles que tenían el valor de la velocidad máxima), la cantidad de observaciones disminuyeron de 67.845 (inicialmente) a 4.585 (cantidad final). Es, por este motivo, que las calles mapeadas en el último mapa son menos que las localizadas en el anteúltimo mapa (titulado: "Calles en área seleccionada en San Francisco). 
+
+Ahora bien, analizando el mapa en detalle, se visualizan pocas arterias con velocidades superiores a 75km/h. Sin embargo, la avenida "silver Avenue" parece ser una de alta velocidad, que puede deberse al hecho de que conecta con South San Francisco y con el barrio insular de Treasure Island. 
+
+
+2.a. Descargaremos una capa de datos sobre transporte público, con el fin de conocer si las PZRI cuentan con buena accesibilidad. 
+
+
+```{r}
+sf_transporte <- opq(bbox_sf) %>% 
+  add_osm_feature (key="public_transport", value = ("stop_position"))
+```
+
+```{r}
+sf_transporte <- osmdata_sf(sf_transporte)
+```
+
+```{r}
+sf_transporte
+```
+
+```{r}
+sf_transporte <- sf_transporte$osm_points
+```
+
+```{r}
+sf_transporte <- st_intersection(sf_transporte, geometria2)
+```
+
+```{r}
+sf_transporte <- mutate(sf_transporte, tipo="Paradas")
+```
+
+
+```{r}
+ggmap(Mapa_SF)+
+  geom_sf(data=sf_transporte, aes(color=tipo), inherit.aes = FALSE, alpha=0.75, size=0.5)+
+  labs(title="Paradas de transporte público",
+       subtitle="Bus",
+       color="Referencias",
+       caption="Fuente: Open Street Map")+
+  theme_void()
+```
+
+Analizando este mapa, se puede observar que, en líneas generales, las paradas de los buses se distribuyen de forma equitativa en todo el territorio considerado. Ahora bien, vale destacar algunos casos particulares: 
+
+- En el caso del extremo noroeste, se observa una gran cantidad de paradas de buses. 
+
+
+- En el caso del noreste (zona Presidio) se observan pocas paradas, lo cual probablemente este relacionado con el hecho de que allí un gran centro de recreación (incluido Disney).
+
+
+- Por último, respecto a la zona este, resulta interesante destacar que las paradas de buses parecen localizarse sobre las avenidas (ya que, en el mapa anterior, estas arterias están marcadas en color azul-verde haciendo referencia a una velocidad velocidad máxima permitida media), sin adentrarse en la retícula de las manzanas. 
+
+
+2.b Ahora, realizaremos un conteo de las paradas de bus por barrio.
+Vale aclarar que, en el dataset descargado sobre las paradas de bus, ya existe una variable llamada "nhood", en la que se detallan los barrios a los que pertenecen las paradas. 
+Ahora bien, para corroborar que la geometría de cada parada coincida con el barrio cargado en la variable "nhood", realiaremos el siguiente mapa: 
+
+```{r fig.height=8, fig.width=10}
+ggplot() +
+    geom_sf(data = Barrios, fill=NA,color="gray60") +
+    geom_sf(data = sf_transporte, aes(color = nhood), size=0.5, alpha=0.60)+
+  labs(title = "Ubicación de las paradas por barrio en San Francisco",
+       caption = "Fuente: Open Street Map",
+       colour="Barrios")+
+  theme_void()+
+  theme(plot.title = element_text(size = 16),
+        plot.caption = element_text(size = 10))
+```
+
+A partir de este mapa, y al observar que no hay paradas geolocalizadas fuera de los barrios al que dicen pertenecer, podemos confiar en esta información y no hará hacer el procedimiento de "st_join".
+
+
+```{r}
+sf_transporte <- sf_transporte %>% 
+  group_by(nhood) %>% 
+  summarise(cantidad=n())
+```
+
+```{r fig.height=15, fig.width=25}
+ggplot() +
+  geom_col(data= sf_transporte, aes(x=reorder(nhood, -cantidad), y=cantidad, fill=nhood))+
+  geom_text(data= sf_transporte, aes(x=reorder(nhood, -cantidad), y=cantidad, label=as.integer(cantidad)), size=6)+
+  labs(title="Cantidad de paradas de bus por barrio", caption=" Fuente: Open Street Map", x="Barrios de San Francisco", y="Cantidad de paradas de bus", fill= "Barrios")+
+  theme(legend.position = "none")+
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),
+        axis.text.x = element_text(colour = "gray25",size = 15, angle = 90), 
+        axis.text.y = element_text(colour = "gray25",size = 15))
+```
+
+A partir de este gráfico, se puede visualizar una disparidad de cantidad de paradas de buses en los distintos barrios. Mientras Sunset Paradise, Financial District/South Beach, Bayview Hunters Point y West of Twin Peaks poseen más de 200 paradas; Treasure Island, McLaren Park, Japantown y Seacliff y Lincoln Park poseen menos de 20 paradas. 
+
+
+Ahora realizaremos un mapa coroplético con el fin de poder comparar las cantidades de paradas de buses en los distintos barrios de forma geolocalizada (a diferencia del gráfico anterior).
+
+```{r}
+Barrios <- Barrios %>%
+  left_join(sf_transporte, by="nhood")
+```
+
+
+```{r fig.height=15, fig.width=25}
+ggmap(Mapa_SF)+
+  geom_sf(data= sf_transporte, aes(fill=cantidad),inherit.aes = FALSE, alpha=0.90)+
+   labs(title = "Cantidad de paradas de bus por barrio", 
+       fill = "Cantidad de paradas", 
+       caption = "Fuente: Open Street Map",
+     x="Longitud",y="Latitud")+
+  theme(title=element_text(size=30),
+    axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))+
+  scale_fill_viridis_d()
+```
+
+Vale aclarar que, como en el Open Street Map no encontramos un dataset sobre Proyectos de Zonificación Residencial Inclusiva, descargamos el dataset de las paradas de bus ya que consideramos interesante poder cruzar ambos datasets para conocer si los PRZI poseen buena accesibilidad. 
+
+
+```{r}
+#sf_transporte_barrios <- sf_transporte %>% 
+  #left_join(Barrios_noespacial, by="nhood")
+```
+
+```{r}
+#sf_transporte_barrios <- mutate(sf_transporte_barrios, densidadT=round(cantidad/superficie_km, 2))
+```
+
+```{r fig.height=15, fig.width=25}
+#ggmap(Mapa_SF)+
+  #geom_sf(data= cantidadPZI_barrios, aes(fill=densidad),inherit.aes = FALSE, alpha=0.95, color="black")+
+   #labs(title = "Densidad de proyectos residenciales de zonificación inclusiva por barrio", 
+       #fill = "Densidad de PRZI", 
+       #caption = "Fuente: DATA SF",
+     #x="Longitud", y="Latitud") +
+  #theme(title=element_text(size=30),
+    #axis.text=element_text(size=15), axis.title=element_text(size=20),legend.text=element_text(size=20))+
+  #scale_fill_viridis_c()
+```
+
+
+
